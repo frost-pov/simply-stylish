@@ -608,6 +608,17 @@ footer span { color: rgba(212, 120, 79, 0.95); }
 }
 .cart-close:hover { background: var(--rust); }
 
+/* HTML [hidden] loses to #id { display:flex } — without this, bag + checkout + success stack and overlap */
+#cartDrawerCart[hidden],
+#cartDrawerCheckout[hidden],
+#checkoutFlowMain[hidden],
+#checkoutFlowSuccess[hidden] {
+  display: none !important;
+}
+.cart-btn .cart-badge[hidden] {
+  display: none !important;
+}
+
 #cartDrawerCart { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #cartDrawerCheckout {
   flex: 1;
