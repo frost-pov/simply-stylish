@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simply Stylish Thrift Store</title>
+
+  <!-- Google Fonts: Playfair Display (headings) + Lato (body text) -->
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- ============================================================
+       NAVIGATION BAR
+       Fixed at the top. Links scroll to each section on the page.
+       ============================================================ -->
+  <nav>
+    <div class="nav-logo"><em>Simply</em> Stylish Thrift</div>
+    <ul class="nav-links">
+      <li><a href="#about">Our Story</a></li>
+      <li><a href="#shop">Shop</a></li>
+      <li><a href="#contact">Visit Us</a></li>
+    </ul>
+  </nav>
+
+
+  <!-- ============================================================
+       HERO SECTION
+       Full-screen welcome banner with two call-to-action buttons.
+       ============================================================ -->
+  <section id="hero">
+    <div class="hero-content">
+      <div class="hero-tag">♻ Preloved · Reimagined · Yours</div>
+
+      <h1 class="hero-title">
+        Simply<br>Stylish<br>Thrift Store
+      </h1>
+
+      <p class="hero-sub">
+        Discover hidden gems 
+        and shop sustainably .
+      </p>
+
+      <div class="hero-btns">
+        <a href="#shop" class="btn btn-primary">Browse the Shop</a>
+        <a href="#contact" class="btn btn-outline">Visit Us</a>
+      </div>
+    </div>
+
+    <!-- Animated down arrow -->
+    <div class="hero-scroll">↓</div>
+  </section>
+
+
+  <!-- ============================================================
+       ABOUT / OUR STORY SECTION
+       Edit the text below to tell your own story.
+       Replace the 🛍 emoji with a real <img> tag when you have a photo.
+       ============================================================ -->
+  <section id="about">
+    <div class="container">
+      <div class="about-grid">
+
+        <!-- Left: store image placeholder -->
+        <div class="about-image-wrap">
+          <div class="about-img-placeholder">🛍</div>
+          <!-- "Est." badge — update the year once you know it -->
+          <div class="about-badge">
+            <span class="big">Est.</span>
+            <span class="small">Our Store</span>
+          </div>
+        </div>
+
+        <!-- Right: story text -->
+        <div>
+          <p class="section-label">Our Story</p>
+          <h2 class="section-title">More Than Just a<br><em>Thrift Store</em></h2>
+          <div class="divider"></div>
+
+          <!-- ✏️ Edit this paragraph to match your story -->
+          <p class="section-body">
+            Simply Stylish was born from a love of great finds and a belief
+            that sustainable fashion should be accessible to everyone. We
+            handpick every item that hits our floor — from vintage coats to
+            barely-worn dresses — so you can shop with confidence.
+          </p>
+          <p class="section-body" style="margin-top:1rem;">
+            We're proud to be part of this community, keeping good things in
+            circulation  one fit at a time.
+          </p>
+
+          <!-- ✏️ Edit these bullet points to match your values -->
+          <ul class="values-list">
+            <li>Sustainably minded &amp; community driven</li>
+            <li>Carefully curated, quality-checked items</li>
+            <li>Affordable prices for everyone</li>
+            <li>Proceeds support local causes</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       SHOP SECTION
+       Items load automatically from your Google Sheet.
+       See shop.js for the setup instructions and config.
+       ============================================================ -->
+  <section id="shop">
+    <div class="container">
+
+      <!-- Section heading -->
+      <div class="shop-top">
+        <p class="section-label">The Good Stuff</p>
+        <h2 class="section-title">Browse Our <em>Fits</em></h2>
+        <div class="divider"></div>
+        <p class="section-body" style="max-width:460px;">
+          Fresh stock added regularly. Filter by category or search by name, size, or colour.
+        </p>
+
+        <!-- Search bar -->
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="Search by name, size, colour…"
+            oninput="handleSearch()"
+          />
+        </div>
+      </div>
+
+      <!-- Category filter buttons -->
+      <div class="filters">
+        <button class="filter-btn active" onclick="setFilter('All')">All</button>
+        <button class="filter-btn" onclick="setFilter('Tops')">Tops</button>
+        <button class="filter-btn" onclick="setFilter('Bottoms')">Bottoms</button>
+        <button class="filter-btn" onclick="setFilter('Dresses')">Dresses</button>
+        <button class="filter-btn" onclick="setFilter('Outerwear')">Outerwear</button>
+        <button class="filter-btn" onclick="setFilter('Shoes')">Shoes</button>
+        <button class="filter-btn" onclick="setFilter('Accessories')">Accessories</button>
+      </div>
+
+      <!-- Results count e.g. "Showing 1–24 of 312 items" -->
+      <div class="results-count" id="resultsCount"></div>
+
+      <!-- Item cards are injected here by shop.js -->
+      <div class="items-grid" id="itemsGrid"></div>
+
+      <!-- Pagination buttons injected here by shop.js -->
+      <div class="pagination" id="pagination"></div>
+
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       CONTACT & HOURS SECTION
+       ✏️ Replace the placeholder address, phone, email, hours,
+          and social handle with your real details.
+       ============================================================ -->
+  <section id="contact">
+    <div class="container">
+      <p class="section-label">Come Say Hello</p>
+      <h2 class="section-title">Find <em>Us</em></h2>
+      <div class="divider"></div>
+
+      <div class="contact-grid">
+
+        <!-- Address card — ✏️ update address and Google Maps link -->
+        <div class="contact-card">
+          <div class="contact-icon">📍</div>
+          <h3>Location</h3>
+          <address>
+           LOWER KABETE
+<br>
+            PICKUP POINT-STAR MALL SHOP B8<br><br>
+            <a href="#">Get Directions →</a>
+          </address>
+        </div>
+
+        <!-- Hours card — ✏️ update your opening hours -->
+        <div class="contact-card">
+          <div class="contact-icon">🕐</div>
+          <h3>Store Hours</h3>
+          <div>
+            <div class="hours-row"><span class="day">Mon – Fri</span><span>8am – 6pm</span></div>
+            <div class="hours-row"><span class="day">Saturday</span><span>9am – 5pm</span></div>
+            <div class="hours-row"><span class="day">Sunday</span><span>11am – 4pm</span></div>
+          </div>
+        </div>
+
+        <!-- Phone & email card — ✏️ update number and email -->
+        <div class="contact-card">
+          <div class="contact-icon">📞</div>
+          <h3>Get in Touch</h3>
+          <p>
+            <a href="tel:+254723526004">0723526004</a><br><br>
+            <a href="mailto:hello@simplystylish.com">hello@simplystylish.com</a>
+          </p>
+        </div>
+
+        <!-- Social media card — ✏️ update Instagram handle and link -->
+        <div class="contact-card">
+          <div class="contact-icon">💬</div>
+          <h3>Follow Along</h3>
+          <p>
+            Stay up to date on new arrivals, deals &amp; events.<br><br>
+            <a href="https://www.instagram.com/simplystylishthrifts" target="_blank">
+              @simplystylishthrifts
+            </a>
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ============================================================
+       FOOTER
+       ✏️ Update the year if needed.
+       ============================================================ -->
+  <footer>
+    <p>© 2026 <span>Simply Stylish Thrift Store</span> · Made with 🤎 for our community</p>
+  </footer>
+
+
+  <!-- Shop logic (loads inventory from Google Sheet) -->
+  <script src="shop.js"></script>
+
+</body>
+</html>
