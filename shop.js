@@ -306,12 +306,15 @@ function normalizePhone254(phoneRaw) {
 }
 
 function fulfillmentHuman(value) {
-  if (value === "delivery") return "Delivery — we'll contact you for delivery details.";
-  return "Store pickup — Star Mall B8.";
+  if (value === "delivery") {
+    return "I'd like delivery — happy to share address / directions once you reply.";
+  }
+  return "I'll pick up from Star Mall B8.";
 }
 
 /**
- * Polished WhatsApp draft to the shop owner only (commission copy is handled on the server, never surfaced here).
+ * WhatsApp prefill — written as the shopper DM'ing the boutique (not shop-to-customer tone).
+ * Ledger copy is server-only; never put internal numbers here.
  */
 function buildProfessionalOrderDraft(order) {
   const kes = "KSh";
@@ -330,34 +333,31 @@ function buildProfessionalOrderDraft(order) {
     .join("\n");
 
   const parts = [
-    "Hello — thank you for ordering with Simply Stylish Thrift.",
+    "Hi Simply Stylish 👋 I've paid via M-Pesa Pay Bill and I'm sending my order details here.",
     "",
-    `Order reference: ${ref}`,
-    `Name: ${order.fullName}`,
-    `Mobile / WhatsApp: ${order.phone}`,
+    `Checkout reference: ${ref}`,
+    `My name: ${order.fullName}`,
+    `Reach me on WhatsApp: ${order.phone}`,
     "",
   ];
   if (order.email && String(order.email).trim())
     parts.push(`Email: ${String(order.email).trim()}`, "");
 
-  parts.push(`Fulfillment: ${fulfillmentHuman(order.fulfillment)}`, "");
+  parts.push(`How I'd like to receive it: ${fulfillmentHuman(order.fulfillment)}`, "");
   parts.push("Items", itemLines || "• (See admin if lines were truncated)", "");
   parts.push(`Order total: ${kes} ${total}`, "");
-  parts.push("Payment — M-Pesa Pay Bill");
+  parts.push("M-Pesa Pay Bill details I used");
   parts.push(`Paybill: ${MPESA_PAYBILL}`);
   parts.push(`Account: ${MPESA_PAYBILL_ACCOUNT}`);
   parts.push(`Amount: ${kes} ${total}`);
   parts.push(`M-Pesa confirmation code: ${code}`);
-  parts.push("", "Customer notes:");
+  parts.push("", "Notes:");
 
   if (order.notes && String(order.notes).trim()) parts.push(`${String(order.notes).trim()}`, "");
   else parts.push("(none)", "");
 
   parts.push(
-    "We're glad to confirm against this SMS code. Reply on this chat if you'd like pickup time or sizing tweaks.",
-    "",
-    "Warm regards,",
-    "Simply Stylish · Star Mall B8",
+    "Please confirm when you've matched this payment to my code. Happy to tweak pickup time or sizes if needed. Thanks!",
   );
 
   return parts.join("\n").trim();
@@ -376,14 +376,13 @@ function buildOwnerWhatsAppUrl(order) {
     const total = Number(order.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
     const code = ((order.mpesaConfirmationCode || "") + "").trim().toUpperCase();
     const short = [
-      "Simply Stylish Thrift · order summary",
+      "Hi Simply Stylish — order after Pay Bill (see full message if this is shortened).",
       `Ref: ${order.id}`,
       `${order.fullName} · ${order.phone}`,
-      `Fulfillment: ${fulfillmentHuman(order.fulfillment)}`,
+      `${fulfillmentHuman(order.fulfillment)}`,
       `Total KSh ${total}`,
       `M-Pesa code: ${code}`,
       `Paybill ${MPESA_PAYBILL} · Acc ${MPESA_PAYBILL_ACCOUNT}`,
-      "Tap send — full details reached you if URL length allows.",
     ].join("\n");
     url = `${base}?text=${encodeURIComponent(short)}`;
   }

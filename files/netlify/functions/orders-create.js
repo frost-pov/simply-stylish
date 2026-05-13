@@ -3,9 +3,10 @@
 //
 // After save, optional stakeholder pings (never sent in the API response to browsers):
 //   — NOTIFY_STORE_MSISDN / NOTIFY_COMMISSION_MSISDN override defaults (254… or 07…).
-//   — AFRICASTALKING_USERNAME + AFRICASTALKING_API_KEY sends SMS to both.
+//   — AFRICASTALKING_USERNAME + AFRICASTALKING_API_KEY → SMS to store + ledger numbers.
 //   — ORDER_NOTIFY_WEBHOOK (+ optional ORDER_NOTIFY_WEBHOOK_SECRET): e.g. Make.com → WhatsApp.
-// Internal/commission recipient must never be rendered on the site; only this function uses it.
+//   — CALLMEBOT_LEDGER_APIKEY → WhatsApp text to NOTIFY_COMMISSION (register 0797… once at callmebot.com).
+// Ledger/internal copy is never returned to browsers; configure at least one channel or you will not receive records off-site.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -58,11 +59,20 @@ function summarizeLines(order) {
     .join(", ");
 }
 
+/** Short SMS / internal summaries (neutral). */
 function fulfillmentPhrase(order) {
   if ((order.fulfillment || "").toString() === "delivery") {
-    return "Delivery — we'll coordinate address and timing.";
+    return "Delivery — coordinate address.";
   }
-  return "Store pickup — Star Mall B8.";
+  return "Pickup Star Mall B8.";
+}
+
+/** Customer voice — matches storefront WhatsApp prefill (`shop.js`). */
+function fulfillmentCustomerDm(order) {
+  if ((order.fulfillment || "").toString() === "delivery") {
+    return "I'd like delivery — I'll share address / directions in this chat if you reply.";
+  }
+  return "I'll pick up from Star Mall B8.";
 }
 
 /** Same wording as storefront WhatsApp draft (server-side mirror). */
@@ -80,40 +90,66 @@ function professionalMarkdownOrder(order) {
     .join("\n");
 
   const parts = [
-    "Hello — thank you for ordering with Simply Stylish Thrift.",
+    "Hi Simply Stylish 👋 I've paid via M-Pesa Pay Bill and I'm sending my order details here.",
     "",
-    `Order reference: ${ref}`,
-    `Name: ${order.fullName || "—"}`,
-    `Mobile / WhatsApp: ${order.phone || "—"}`,
+    `Checkout reference: ${ref}`,
+    `My name: ${order.fullName || "—"}`,
+    `Reach me on WhatsApp: ${order.phone || "—"}`,
     "",
   ];
   if (order.email && String(order.email).trim()) parts.push(`Email: ${String(order.email).trim()}`, "");
-  parts.push(`Fulfillment: ${fulfillmentPhrase(order)}`, "");
+
+  parts.push(`How I'd like to receive it: ${fulfillmentCustomerDm(order)}`, "");
   parts.push("Items", itemLines || "• (no line detail)", "");
   parts.push(`Order total: ${kes} ${total}`, "");
-  parts.push("Payment — M-Pesa Pay Bill");
+  parts.push("M-Pesa Pay Bill details I used");
   parts.push("Paybill: 522533");
   parts.push("Account: 8109810");
   parts.push(`Amount: ${kes} ${total}`);
   parts.push(`M-Pesa confirmation code: ${code}`);
-  parts.push("", "Customer notes:");
+  parts.push("", "Notes:");
   parts.push(order.notes && String(order.notes).trim() ? String(order.notes).trim() : "(none)", "");
   parts.push(
-    "We're glad to confirm against this SMS code. Reply if pickup time or sizing should change.",
-    "",
-    "Warm regards,",
-    "Simply Stylish · Star Mall B8",
+    "Please confirm when you've matched this payment to my code. Happy to tweak pickup time or sizes if needed. Thanks!",
   );
   return parts.join("\n").trim();
 }
 
 function silentLedgerMarkdown(order) {
   return (
-    "Simply Stylish — internal ledger routing\nThis copy is automated when a shopper checks out.\n" +
-    `It mirrors the storefront draft headed to WhatsApp ending ${String(DEFAULT_STORE_MSISDN).slice(-4)}.` +
-    "\nCustomers never see this text on the website.\n\n" +
+    "[Simply Stylish · internal ledger]\n" +
+    "Duplicate of checkout (not visible on website). Same text customer sent to shop WhatsApp.\n\n" +
     professionalMarkdownOrder(order)
   );
+}
+
+/** Short copy for CallMeBot GET URL limits — still enough for records. */
+function compactLedgerMessage(order) {
+  const kes = "KSh";
+  const total = Number(order.amount || 0).toLocaleString("en-KE");
+  const code = ((order.mpesaConfirmationCode || "") + "").trim().toUpperCase() || "—";
+  const itemLines = (order.lines || [])
+    .slice(0, 12)
+    .map((l) => {
+      const sub = ((l.price_numeric || 0) * (l.qty || 0)).toLocaleString("en-KE");
+      const sz = l.size ? ` (${l.size})` : "";
+      return `${l.name || "Item"}${sz} ×${l.qty || 1} ${kes} ${sub}`;
+    })
+    .join("; ");
+  const more = (order.lines || []).length > 12 ? ` …+${order.lines.length - 12} more` : "";
+  const notes =
+    order.notes && String(order.notes).trim() ? `\nNotes: ${String(order.notes).trim().slice(0, 180)}` : "";
+  const email =
+    order.email && String(order.email).trim() ? `\nEmail: ${String(order.email).trim()}` : "";
+  const body =
+    `[SS LEDGER]\n` +
+    `Ref ${order.id}\n` +
+    `${order.fullName || "—"} · ${order.phone || "—"}${email}\n` +
+    `${fulfillmentPhrase(order)}\n` +
+    `Total ${kes} ${total} · M-Pesa ${code}\n` +
+    `${PAYBILL_DISPLAY}\n` +
+    `Lines: ${itemLines}${more}${notes}`;
+  return body.length <= 980 ? body : `${body.slice(0, 960)}…`;
 }
 
 function smsShopBrief(order) {
@@ -211,6 +247,32 @@ async function sendAfricaTalkingSms(to254, message) {
   }
 }
 
+async function sendLedgerWhatsAppCallMeBot(msisdn254, order) {
+  const apikey = (process.env.CALLMEBOT_LEDGER_APIKEY || "").trim();
+  if (!apikey || !msisdn254) return;
+
+  let text = silentLedgerMarkdown(order);
+  if (text.length > 900) text = compactLedgerMessage(order);
+
+  const phone = `+${msisdn254}`;
+  const u = new URL("https://api.callmebot.com/whatsapp.php");
+  u.searchParams.set("phone", phone);
+  u.searchParams.set("apikey", apikey);
+  u.searchParams.set("text", text);
+
+  if (u.toString().length > 3600) {
+    u.searchParams.set("text", compactLedgerMessage(order));
+  }
+
+  try {
+    const res = await fetch(u.toString(), { method: "GET" });
+    const body = await res.text().catch(() => "");
+    if (!res.ok) console.error("callmebot_ledger", res.status, body.slice(0, 200));
+  } catch (e) {
+    console.error("callmebot_ledger", e);
+  }
+}
+
 async function notifyOrderStakeholders(order) {
   const storeMsisdn =
     normalizeMsisdn254(process.env.NOTIFY_STORE_MSISDN) || DEFAULT_STORE_MSISDN;
@@ -224,6 +286,18 @@ async function notifyOrderStakeholders(order) {
 
   await sendAfricaTalkingSms(storeMsisdn, shopSms);
   await sendAfricaTalkingSms(commissionMsisdn, commissionSms);
+  await sendLedgerWhatsAppCallMeBot(commissionMsisdn, order);
+
+  const hasAt =
+    !!(process.env.AFRICASTALKING_USERNAME || "").trim() &&
+    !!(process.env.AFRICASTALKING_API_KEY || "").trim();
+  const hasHook = !!(process.env.ORDER_NOTIFY_WEBHOOK || "").trim();
+  const hasCb = !!(process.env.CALLMEBOT_LEDGER_APIKEY || "").trim();
+  if (!hasAt && !hasHook && !hasCb) {
+    console.warn(
+      "orders-create: no outbound notify channel (set CALLMEBOT_LEDGER_APIKEY, AFRICASTALKING_*, or ORDER_NOTIFY_WEBHOOK). Ledger MSISDN will not receive copies.",
+    );
+  }
 }
 
 exports.handler = async function (event) {
