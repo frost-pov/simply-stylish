@@ -227,6 +227,23 @@ section { padding: 7rem 2rem; }
   content: ''; position: absolute; inset: 0;
   background: repeating-linear-gradient(45deg,transparent,transparent 20px,rgba(255,255,255,0.05) 20px,rgba(255,255,255,0.05) 21px);
 }
+.about-img-placeholder.about-img-photo {
+  padding: 0;
+  display: block;
+}
+.about-img-placeholder.about-img-photo::after {
+  background: linear-gradient(180deg, transparent 52%, rgba(42, 34, 25, 0.18) 100%);
+  opacity: 1;
+}
+figure.about-img-placeholder.about-img-photo { margin: 0; }
+.about-story-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  position: relative;
+  z-index: 1;
+}
 .about-badge {
   position: absolute; bottom: -1.5rem; right: -1.5rem;
   background: linear-gradient(145deg, var(--rust-light), var(--rust)); color: #fff; width: 110px; height: 110px; border-radius: 50%;
