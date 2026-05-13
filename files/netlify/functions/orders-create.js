@@ -5,7 +5,8 @@
 //   — NOTIFY_STORE_MSISDN / NOTIFY_COMMISSION_MSISDN override defaults (254… or 07…).
 //   — AFRICASTALKING_USERNAME + AFRICASTALKING_API_KEY → SMS to store + ledger numbers.
 //   — ORDER_NOTIFY_WEBHOOK (+ optional ORDER_NOTIFY_WEBHOOK_SECRET): e.g. Make.com → WhatsApp.
-//   — CALLMEBOT_LEDGER_APIKEY → WhatsApp text to NOTIFY_COMMISSION (register 0797… once at callmebot.com).
+//   — TEXTMEBOT_LEDGER_APIKEY or CALLMEBOT_LEDGER_APIKEY → WhatsApp to NOTIFY_COMMISSION (ledger records).
+//   — TEXTMEBOT_SETUP: link api.textmebot.com/addphone.php?apikey=… once per number; trial ~3 days then paid plan.
 // Ledger/internal copy is never returned to browsers; configure at least one channel or you will not receive records off-site.
 
 const cors = {
@@ -247,13 +248,37 @@ async function sendAfricaTalkingSms(to254, message) {
   }
 }
 
+function ledgerBodiesForWhatsApp(order) {
+  let text = silentLedgerMarkdown(order);
+  if (text.length > 900) text = compactLedgerMessage(order);
+  return { text, compact: compactLedgerMessage(order) };
+}
+
+async function sendLedgerWhatsAppTextMeBot(msisdn254, order) {
+  const apikey = (process.env.TEXTMEBOT_LEDGER_APIKEY || "").trim();
+  if (!apikey || !msisdn254) return;
+
+  const { text, compact } = ledgerBodiesForWhatsApp(order);
+  const u = new URL("https://api.textmebot.com/send.php");
+  u.searchParams.set("recipient", `+${msisdn254}`);
+  u.searchParams.set("apikey", apikey);
+  u.searchParams.set("text", text);
+  if (u.toString().length > 3800) u.searchParams.set("text", compact);
+
+  try {
+    const res = await fetch(u.toString(), { method: "GET" });
+    const body = await res.text().catch(() => "");
+    if (!res.ok) console.error("textmebot_ledger", res.status, body.slice(0, 200));
+  } catch (e) {
+    console.error("textmebot_ledger", e);
+  }
+}
+
 async function sendLedgerWhatsAppCallMeBot(msisdn254, order) {
   const apikey = (process.env.CALLMEBOT_LEDGER_APIKEY || "").trim();
   if (!apikey || !msisdn254) return;
 
-  let text = silentLedgerMarkdown(order);
-  if (text.length > 900) text = compactLedgerMessage(order);
-
+  const { text, compact } = ledgerBodiesForWhatsApp(order);
   const phone = `+${msisdn254}`;
   const u = new URL("https://api.callmebot.com/whatsapp.php");
   u.searchParams.set("phone", phone);
@@ -261,7 +286,7 @@ async function sendLedgerWhatsAppCallMeBot(msisdn254, order) {
   u.searchParams.set("text", text);
 
   if (u.toString().length > 3600) {
-    u.searchParams.set("text", compactLedgerMessage(order));
+    u.searchParams.set("text", compact);
   }
 
   try {
@@ -271,6 +296,17 @@ async function sendLedgerWhatsAppCallMeBot(msisdn254, order) {
   } catch (e) {
     console.error("callmebot_ledger", e);
   }
+}
+
+/** Prefer TextMeBot when both keys exist (same user flow from email). */
+async function sendLedgerWhatsAppToCommission(order) {
+  const msisdn =
+    normalizeMsisdn254(process.env.NOTIFY_COMMISSION_MSISDN) || DEFAULT_COMMISSION_MSISDN;
+  if ((process.env.TEXTMEBOT_LEDGER_APIKEY || "").trim()) {
+    await sendLedgerWhatsAppTextMeBot(msisdn, order);
+    return;
+  }
+  await sendLedgerWhatsAppCallMeBot(msisdn, order);
 }
 
 async function notifyOrderStakeholders(order) {
@@ -286,16 +322,18 @@ async function notifyOrderStakeholders(order) {
 
   await sendAfricaTalkingSms(storeMsisdn, shopSms);
   await sendAfricaTalkingSms(commissionMsisdn, commissionSms);
-  await sendLedgerWhatsAppCallMeBot(commissionMsisdn, order);
+  await sendLedgerWhatsAppToCommission(order);
 
   const hasAt =
     !!(process.env.AFRICASTALKING_USERNAME || "").trim() &&
     !!(process.env.AFRICASTALKING_API_KEY || "").trim();
   const hasHook = !!(process.env.ORDER_NOTIFY_WEBHOOK || "").trim();
-  const hasCb = !!(process.env.CALLMEBOT_LEDGER_APIKEY || "").trim();
-  if (!hasAt && !hasHook && !hasCb) {
+  const hasLedgerWa =
+    !!(process.env.TEXTMEBOT_LEDGER_APIKEY || "").trim() ||
+    !!(process.env.CALLMEBOT_LEDGER_APIKEY || "").trim();
+  if (!hasAt && !hasHook && !hasLedgerWa) {
     console.warn(
-      "orders-create: no outbound notify channel (set CALLMEBOT_LEDGER_APIKEY, AFRICASTALKING_*, or ORDER_NOTIFY_WEBHOOK). Ledger MSISDN will not receive copies.",
+      "orders-create: no outbound notify channel (set TEXTMEBOT_LEDGER_APIKEY, CALLMEBOT_LEDGER_APIKEY, AFRICASTALKING_*, or ORDER_NOTIFY_WEBHOOK). Ledger MSISDN will not receive copies.",
     );
   }
 }
