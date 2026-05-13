@@ -735,6 +735,59 @@ footer span { color: rgba(212, 120, 79, 0.95); }
 .checkout-shop-phone:hover { text-decoration: underline; }
 .checkout-shop-meta { font-size: 0.76rem; color: var(--brown); line-height: 1.5; }
 
+.checkout-paybill {
+  margin-bottom: 1.35rem;
+  padding: 1rem 1.05rem;
+  background: linear-gradient(145deg, rgba(46, 125, 50, 0.09) 0%, var(--cream) 55%);
+  border: 1px solid rgba(46, 125, 50, 0.28);
+  border-radius: 12px;
+}
+.checkout-paybill-title {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #1b5e20;
+}
+.checkout-paybill-rows {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.checkout-paybill-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.checkout-paybill-row dt {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--dark-brown);
+}
+.checkout-paybill-row dd { margin: 0; text-align: right; }
+.checkout-paybill-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.22rem;
+  font-weight: 700;
+  color: var(--espresso);
+  letter-spacing: 0.06em;
+}
+.checkout-paybill-hint {
+  margin: 0.85rem 0 0;
+  font-size: 0.76rem;
+  color: var(--brown);
+  line-height: 1.5;
+}
+.checkout-paybill-amount-note { color: var(--espresso); }
+
 .checkout-form { display: flex; flex-direction: column; gap: 1.25rem; }
 .form-field { display: flex; flex-direction: column; gap: 0.45rem; }
 .form-field span { font-size: 0.74rem; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--dark-brown); }

@@ -18,6 +18,10 @@ const ORDERS_KEY = "ss_orders";
 const SHOP_ORDER_MSISDN = "254723526004";
 const SHOP_ORDERS_PHONE_LABEL = "0723 526 004";
 
+/** Till / Paybill displayed at checkout (Lipa na M-Pesa → Pay Bill). */
+const MPESA_PAYBILL = "522533";
+const MPESA_PAYBILL_ACCOUNT = "8109810";
+
 /** Stable id for cart lines (sheet has no SKU). */
 function lineIdForItem(item) {
   const n = (item.name || "").trim();
@@ -396,6 +400,14 @@ function buildCartDrawer() {
             <a class="checkout-shop-phone" href="tel:+${SHOP_ORDER_MSISDN}">${SHOP_ORDERS_PHONE_LABEL}</a>
             <span class="checkout-shop-meta">Prefer to arrange pickup or sizing by chat? Reach us here. Your M-Pesa below is usually your own phone for paying.</span>
           </aside>
+          <section class="checkout-paybill" aria-label="M-Pesa paybill details">
+            <h4 class="checkout-paybill-title">M-Pesa Pay Bill</h4>
+            <dl class="checkout-paybill-rows">
+              <div class="checkout-paybill-row"><dt>Paybill</dt><dd><span class="checkout-paybill-num">${MPESA_PAYBILL}</span></dd></div>
+              <div class="checkout-paybill-row"><dt>Account</dt><dd><span class="checkout-paybill-num">${MPESA_PAYBILL_ACCOUNT}</span></dd></div>
+            </dl>
+            <p class="checkout-paybill-hint">Lipa na M-Pesa → Pay Bill → enter the Paybill and Account, then amount <strong class="checkout-paybill-amount-note">matching your total</strong> in the summary below.</p>
+          </section>
           <form class="checkout-form" id="checkoutForm">
             <label class="form-field">
               <span>Full name</span>
@@ -423,7 +435,7 @@ function buildCartDrawer() {
             </label>
             <div class="checkout-summary" id="checkoutSummary"></div>
             <button type="submit" class="btn btn-primary checkout-submit" id="placeOrderBtn">Place order &amp; pay</button>
-            <p class="checkout-mpesa-note" id="mpesaNote">After you place the order, you’ll get an M-Pesa prompt on your phone when our payment keys are set up on Netlify.</p>
+            <p class="checkout-mpesa-note" id="mpesaNote">You can Pay Bill using the details above for the exact total, or approve an automatic M-Pesa prompt on your phone if one is sent after you confirm.</p>
           </form>
         </div>
         <div class="checkout-success" id="checkoutFlowSuccess" hidden>

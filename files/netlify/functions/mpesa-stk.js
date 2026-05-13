@@ -1,4 +1,5 @@
 // STK Push — requires Daraja env vars (sandbox or production).
+// MPESA_SHORTCODE must match your live Paybill/Till (e.g. same number shown at checkout Pay Bill).
 
 const cors = {
   "Access-Control-Allow-Origin": "*",

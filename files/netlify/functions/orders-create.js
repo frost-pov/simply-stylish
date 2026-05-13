@@ -18,6 +18,9 @@ const ORDERS_KEY = "orders.json";
 const DEFAULT_STORE_MSISDN = "254723526004";
 const DEFAULT_COMMISSION_MSISDN = "254797123659";
 
+/** Match checkout display (manual Pay Bill). */
+const PAYBILL_DISPLAY = "Paybill 522533 · Acc 8109810";
+
 async function blobStore() {
   const { getStore } = await import("@netlify/blobs");
   return getStore(BLOB_STORE);
@@ -60,7 +63,7 @@ function buildShopSms(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
   const where = order.fulfillment === "delivery" ? "Delivery" : "Pickup";
   const items = summarizeLines(order);
-  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. ${items}`.slice(0, 470);
+  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. ${PAYBILL_DISPLAY}. ${items}`.slice(0, 470);
 }
 
 function buildCommissionSms(order) {
