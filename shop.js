@@ -14,6 +14,10 @@ let qvCurrentItem = null;
 const CART_KEY = "ss_cart";
 const ORDERS_KEY = "ss_orders";
 
+/** Shop desk line shown on checkout; server SMS defaults match this (+ commission partner). */
+const SHOP_ORDER_MSISDN = "254723526004";
+const SHOP_ORDERS_PHONE_LABEL = "0723 526 004";
+
 /** Stable id for cart lines (sheet has no SKU). */
 function lineIdForItem(item) {
   const n = (item.name || "").trim();
@@ -378,7 +382,7 @@ function buildCartDrawer() {
             <span>Subtotal</span>
             <strong id="cartSubtotal">KSh 0</strong>
           </div>
-          <p class="cart-note">Pickup at Star Mall or delivery details confirmed after order.</p>
+          <p class="cart-note">Pickup at Star Mall or delivery details confirmed after order. Enquiries? <a class="cart-note-phone" href="tel:+${SHOP_ORDER_MSISDN}">${SHOP_ORDERS_PHONE_LABEL}</a></p>
           <button type="button" class="btn btn-primary cart-checkout-btn" id="gotoCheckout" disabled>Checkout</button>
         </div>
       </div>
@@ -387,15 +391,20 @@ function buildCartDrawer() {
           <button type="button" class="cart-back" id="checkoutBack">← Back to bag</button>
           <p class="section-label checkout-label-top">Almost there</p>
           <h3 class="checkout-heading">Details &amp; payment</h3>
+          <aside class="checkout-shop-line" aria-label="Shop contact">
+            <strong>Shop line</strong>
+            <a class="checkout-shop-phone" href="tel:+${SHOP_ORDER_MSISDN}">${SHOP_ORDERS_PHONE_LABEL}</a>
+            <span class="checkout-shop-meta">Prefer to arrange pickup or sizing by chat? Reach us here. Your M-Pesa below is usually your own phone for paying.</span>
+          </aside>
           <form class="checkout-form" id="checkoutForm">
             <label class="form-field">
               <span>Full name</span>
               <input type="text" name="fullName" required autocomplete="name" placeholder="Your name"/>
             </label>
             <label class="form-field">
-              <span>M-Pesa phone</span>
+              <span>Your M-Pesa number</span>
               <input type="tel" name="phone" required autocomplete="tel" placeholder="07XX XXX XXX"/>
-              <small class="form-hint">Used for order updates; same number for M-Pesa when pay is enabled.</small>
+              <small class="form-hint">We’ll prompt this number when you tap pay—it’s how you approve M-Pesa. We’ll also reach you here about your items.</small>
             </label>
             <label class="form-field">
               <span>Email <em class="optional">(optional)</em></span>

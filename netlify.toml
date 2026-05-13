@@ -2,7 +2,7 @@
   publish = "."
 
 [functions]
-  directory = "netlify/functions"
+  directory = "files/netlify/functions"
   node_bundler = "esbuild"
 
 [[redirects]]
