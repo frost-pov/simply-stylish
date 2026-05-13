@@ -58,23 +58,82 @@ function summarizeLines(order) {
     .join(", ");
 }
 
-function buildShopSms(order) {
+function fulfillmentPhrase(order) {
+  if ((order.fulfillment || "").toString() === "delivery") {
+    return "Delivery — we'll coordinate address and timing.";
+  }
+  return "Store pickup — Star Mall B8.";
+}
+
+/** Same wording as storefront WhatsApp draft (server-side mirror). */
+function professionalMarkdownOrder(order) {
+  const kes = "KSh";
+  const total = Number(order.amount || 0).toLocaleString("en-KE");
+  const code = ((order.mpesaConfirmationCode || "") + "").trim().toUpperCase() || "—";
+  const ref = order.id || "—";
+  const itemLines = (order.lines || [])
+    .map((l) => {
+      const sub = ((l.price_numeric || 0) * (l.qty || 0)).toLocaleString("en-KE");
+      const sz = l.size ? ` (${l.size})` : "";
+      return `• ${l.name || "Item"}${sz}  ×${l.qty || 1}     ${kes} ${sub}`;
+    })
+    .join("\n");
+
+  const parts = [
+    "Hello — thank you for ordering with Simply Stylish Thrift.",
+    "",
+    `Order reference: ${ref}`,
+    `Name: ${order.fullName || "—"}`,
+    `Mobile / WhatsApp: ${order.phone || "—"}`,
+    "",
+  ];
+  if (order.email && String(order.email).trim()) parts.push(`Email: ${String(order.email).trim()}`, "");
+  parts.push(`Fulfillment: ${fulfillmentPhrase(order)}`, "");
+  parts.push("Items", itemLines || "• (no line detail)", "");
+  parts.push(`Order total: ${kes} ${total}`, "");
+  parts.push("Payment — M-Pesa Pay Bill");
+  parts.push("Paybill: 522533");
+  parts.push("Account: 8109810");
+  parts.push(`Amount: ${kes} ${total}`);
+  parts.push(`M-Pesa confirmation code: ${code}`);
+  parts.push("", "Customer notes:");
+  parts.push(order.notes && String(order.notes).trim() ? String(order.notes).trim() : "(none)", "");
+  parts.push(
+    "We're glad to confirm against this SMS code. Reply if pickup time or sizing should change.",
+    "",
+    "Warm regards,",
+    "Simply Stylish · Star Mall B8",
+  );
+  return parts.join("\n").trim();
+}
+
+function silentLedgerMarkdown(order) {
+  return (
+    "Simply Stylish — internal ledger routing\nThis copy is automated when a shopper checks out.\n" +
+    `It mirrors the storefront draft headed to WhatsApp ending ${String(DEFAULT_STORE_MSISDN).slice(-4)}.` +
+    "\nCustomers never see this text on the website.\n\n" +
+    professionalMarkdownOrder(order)
+  );
+}
+
+function smsShopBrief(order) {
   const who = order.fullName || "Customer";
   const tel = order.phone || "—";
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
-  const where = order.fulfillment === "delivery" ? "Delivery" : "Pickup";
+  const code = (order.mpesaConfirmationCode || "—").toString();
+  const where = (order.fulfillment || "").toString() === "delivery" ? "Delivery" : "Pickup";
   const items = summarizeLines(order);
-  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. MPesa code: ${(order.mpesaConfirmationCode || "—").toString()}. ${PAYBILL_DISPLAY}. ${items}`.slice(
+  return `SS order ${order.id}: ${who} ${tel}. ${where}. KSh ${amt}. Code ${code}. ${PAYBILL_DISPLAY}. ${items}`.slice(
     0,
     470,
   );
 }
 
-function buildCommissionSms(order) {
+function smsCommissionBrief(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
-  const tel = order.phone || "—";
   const code = (order.mpesaConfirmationCode || "—").toString();
-  return `SS internal: order ${order.id} KSh ${amt}. Code ${code}. Cust ${tel}.`.slice(0, 470);
+  const tel = order.phone || "—";
+  return `SS INTERNAL ${order.id} KSh ${amt} code:${code} cust:${tel} ${fulfillmentPhrase(order)}`.slice(0, 470);
 }
 
 function waMeLink(msisdn, text, maxChars = 950) {
@@ -84,10 +143,16 @@ function waMeLink(msisdn, text, maxChars = 950) {
   return u;
 }
 
-async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shopMsg, commissionMsg) {
+async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn) {
   const url = (process.env.ORDER_NOTIFY_WEBHOOK || "").trim();
   if (!url) return;
   const secret = (process.env.ORDER_NOTIFY_WEBHOOK_SECRET || "").trim();
+
+  const shopSms = smsShopBrief(order);
+  const shopDraft = professionalMarkdownOrder(order);
+  const commissionSms = smsCommissionBrief(order);
+  const commissionSilent = silentLedgerMarkdown(order);
+
   try {
     const headers = { "Content-Type": "application/json" };
     if (secret) headers["X-Webhook-Secret"] = secret;
@@ -101,14 +166,18 @@ async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shop
         notifications: {
           store: {
             msisdn: storeMsisdn,
-            message: shopMsg,
-            whatsappDeepLink: waMeLink(storeMsisdn, shopMsg),
+            message: shopSms,
+            smsSummary: shopSms,
+            whatsappMerchantDraftMarkdown: shopDraft,
+            whatsappDeepLink: waMeLink(storeMsisdn, shopDraft),
           },
           commission: {
             msisdn: commissionMsisdn,
-            message: commissionMsg,
             internalOnly: true,
-            whatsappDeepLink: waMeLink(commissionMsisdn, commissionMsg),
+            message: commissionSms,
+            smsSummary: commissionSms,
+            silentLedgerDraftMarkdown: commissionSilent,
+            whatsappDeepLink: waMeLink(commissionMsisdn, commissionSilent),
           },
         },
       }),
@@ -148,13 +217,13 @@ async function notifyOrderStakeholders(order) {
   const commissionMsisdn =
     normalizeMsisdn254(process.env.NOTIFY_COMMISSION_MSISDN) || DEFAULT_COMMISSION_MSISDN;
 
-  const shopMsg = buildShopSms(order);
-  const commissionMsg = buildCommissionSms(order);
+  const shopSms = smsShopBrief(order);
+  const commissionSms = smsCommissionBrief(order);
 
-  await postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shopMsg, commissionMsg);
+  await postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn);
 
-  await sendAfricaTalkingSms(storeMsisdn, shopMsg);
-  await sendAfricaTalkingSms(commissionMsisdn, commissionMsg);
+  await sendAfricaTalkingSms(storeMsisdn, shopSms);
+  await sendAfricaTalkingSms(commissionMsisdn, commissionSms);
 }
 
 exports.handler = async function (event) {

@@ -215,7 +215,10 @@ section { padding: 7rem 2rem; }
    ================================================================ */
 #about { background: linear-gradient(180deg, var(--warm-white) 0%, #f8f5ef 100%); }
 .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5rem; align-items: center; }
-.about-image-wrap { position: relative; }
+.about-image-wrap {
+  position: relative;
+  isolation: isolate;
+}
 .about-img-placeholder {
   width: 100%; aspect-ratio: 4/5;
   background: linear-gradient(145deg, #ebe3d6 0%, var(--sand) 50%, #d4c4b0 100%);
@@ -235,17 +238,22 @@ section { padding: 7rem 2rem; }
   background: linear-gradient(180deg, transparent 52%, rgba(42, 34, 25, 0.18) 100%);
   opacity: 1;
 }
-figure.about-img-placeholder.about-img-photo { margin: 0; }
+figure.about-img-placeholder.about-img-photo {
+  margin: 0;
+  position: relative;
+  z-index: 0;
+}
 .about-story-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
   position: relative;
-  z-index: 1;
+  z-index: 0;
 }
 .about-badge {
   position: absolute; bottom: -1.5rem; right: -1.5rem;
+  z-index: 5;
   background: linear-gradient(145deg, var(--rust-light), var(--rust)); color: #fff; width: 110px; height: 110px; border-radius: 50%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   font-family: 'Playfair Display', serif; box-shadow: 0 12px 32px rgba(168, 90, 56, 0.28);

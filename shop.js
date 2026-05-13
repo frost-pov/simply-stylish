@@ -14,14 +14,18 @@ let qvCurrentItem = null;
 const CART_KEY = "ss_cart";
 const ORDERS_KEY = "ss_orders";
 
-/** Shop desk line shown on checkout; server SMS defaults match this (+ commission partner). */
-/** Shop owner WhatsApp (public). Commission / internal lines: server env only. */
+/** Shop owner WhatsApp (public). Never use NOTIFY_COMMISSION / internal lines as customer contacts. */
 const SHOP_ORDER_MSISDN = "254723526004";
 const SHOP_ORDERS_PHONE_LABEL = "0723 526 004";
 
 /** Till / Paybill displayed at checkout (Lipa na M-Pesa → Pay Bill). */
 const MPESA_PAYBILL = "522533";
 const MPESA_PAYBILL_ACCOUNT = "8109810";
+
+/**
+ * Ledger-only line — must match server NOTIFY_COMMISSION default. Block if typed as customer's own number by mistake.
+ */
+const INTERNAL_LEDGER_MSISDN = "254797123659";
 
 /** Stable id for cart lines (sheet has no SKU). */
 function lineIdForItem(item) {
@@ -307,51 +311,61 @@ function fulfillmentHuman(value) {
 }
 
 /**
- * Owner WhatsApp only (secondary numbers handled server-side only).
+ * Polished WhatsApp draft to the shop owner only (commission copy is handled on the server, never surfaced here).
  */
-function buildOwnerWhatsAppUrl(order) {
+function buildProfessionalOrderDraft(order) {
+  const kes = "KSh";
   const total = Number(order.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const code = ((order.mpesaConfirmationCode || "") + "").trim().toUpperCase() || "—";
+  const ref = order.id || "—";
+
   const itemLines = (order.lines || [])
     .map((L) => {
       const sub = ((L.price_numeric || 0) * (L.qty || 0)).toLocaleString(undefined, {
         maximumFractionDigits: 0,
       });
       const sz = L.size ? ` (${L.size})` : "";
-      return `• ${L.name || "Item"}${sz} ×${L.qty || 1} — KSh ${sub}`;
+      return `• ${L.name || "Item"}${sz}  ×${L.qty || 1}     ${kes} ${sub}`;
     })
     .join("\n");
 
-  const text = [
-    `Simply Stylish — new order (${order.id})`,
+  const parts = [
+    "Hello — thank you for ordering with Simply Stylish Thrift.",
     "",
+    `Order reference: ${ref}`,
     `Name: ${order.fullName}`,
-    `Phone / WhatsApp: ${order.phone}`,
-    order.email ? `Email: ${order.email}` : null,
+    `Mobile / WhatsApp: ${order.phone}`,
     "",
-    "How to receive",
-    fulfillmentHuman(order.fulfillment),
-    "",
-    "Items",
-    itemLines || "—",
-    "",
-    `TOTAL: KSh ${total}`,
-    "",
-    `Pay via M-Pesa Paybill: ${MPESA_PAYBILL}`,
-    `Account: ${MPESA_PAYBILL_ACCOUNT}`,
-    `Enter amount: KSh ${total} (Lipa na M-Pesa → Pay Bill).`,
-    "",
-    `M-Pesa confirmation code: ${(order.mpesaConfirmationCode || "").toString().trim() || "—"}`,
-    "",
-    order.notes ? `Notes: ${order.notes}` : null,
-    "",
-    "Please reply here when you have paid so we can prep your bags. Thanks!",
-  ]
-    .filter(Boolean)
-    .join("\n")
-    .trim();
+  ];
+  if (order.email && String(order.email).trim())
+    parts.push(`Email: ${String(order.email).trim()}`, "");
 
-  const max = 1650;
-  const safeText = text.length <= max ? text : text.slice(0, max) + "…";
+  parts.push(`Fulfillment: ${fulfillmentHuman(order.fulfillment)}`, "");
+  parts.push("Items", itemLines || "• (See admin if lines were truncated)", "");
+  parts.push(`Order total: ${kes} ${total}`, "");
+  parts.push("Payment — M-Pesa Pay Bill");
+  parts.push(`Paybill: ${MPESA_PAYBILL}`);
+  parts.push(`Account: ${MPESA_PAYBILL_ACCOUNT}`);
+  parts.push(`Amount: ${kes} ${total}`);
+  parts.push(`M-Pesa confirmation code: ${code}`);
+  parts.push("", "Customer notes:");
+
+  if (order.notes && String(order.notes).trim()) parts.push(`${String(order.notes).trim()}`, "");
+  else parts.push("(none)", "");
+
+  parts.push(
+    "We're glad to confirm against this SMS code. Reply on this chat if you'd like pickup time or sizing tweaks.",
+    "",
+    "Warm regards,",
+    "Simply Stylish · Star Mall B8",
+  );
+
+  return parts.join("\n").trim();
+}
+
+function buildOwnerWhatsAppUrl(order) {
+  const draft = buildProfessionalOrderDraft(order);
+  const safeText = draft.length <= 1580 ? draft : draft.slice(0, 1570) + "…";
 
   const num = normalizePhone254(SHOP_ORDER_MSISDN);
   const base = num ? `https://wa.me/${num}` : "";
@@ -359,16 +373,23 @@ function buildOwnerWhatsAppUrl(order) {
 
   const maxLen = 2000;
   if (url.length > maxLen && base) {
-    const short = `${order.id}: ${order.fullName} · ${order.phone} · Total KSh ${total} · MPesa code ${(order.mpesaConfirmationCode || "").toString().trim()} · Paybill ${MPESA_PAYBILL}`.slice(
-      0,
-      800,
-    );
+    const total = Number(order.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    const code = ((order.mpesaConfirmationCode || "") + "").trim().toUpperCase();
+    const short = [
+      "Simply Stylish Thrift · order summary",
+      `Ref: ${order.id}`,
+      `${order.fullName} · ${order.phone}`,
+      `Fulfillment: ${fulfillmentHuman(order.fulfillment)}`,
+      `Total KSh ${total}`,
+      `M-Pesa code: ${code}`,
+      `Paybill ${MPESA_PAYBILL} · Acc ${MPESA_PAYBILL_ACCOUNT}`,
+      "Tap send — full details reached you if URL length allows.",
+    ].join("\n");
     url = `${base}?text=${encodeURIComponent(short)}`;
   }
 
   return url;
 }
-
 async function postOrderToServer(order) {
   try {
     const res = await fetch("/api/orders-create", {
@@ -478,7 +499,7 @@ function buildCartDrawer() {
               <small class="form-hint">Paste the confirmation code from the M-Pesa message you get right after paying (so we can verify your payment).</small>
             </label>
             <button type="submit" class="btn btn-primary checkout-submit" id="placeOrderBtn">Place order &amp; open WhatsApp</button>
-            <p class="checkout-whatsapp-note" id="whatsappHint">Payment is via M-Pesa Pay Bill (details above)—there is no automatic bank prompt from this site. After you submit, send the WhatsApp message so we can match your payment.</p>
+            <p class="checkout-whatsapp-note" id="whatsappHint">Pay with M-Pesa Pay Bill (above), paste your confirmation code from the M-Pesa SMS, then submit. We open WhatsApp with everything included—send that message so we can verify and prep your order.</p>
           </form>
         </div>
         <div class="checkout-success" id="checkoutFlowSuccess" hidden>
@@ -554,6 +575,26 @@ async function submitCheckout(e) {
   const mpesaConfirmationCode = (fd.get("mpesaConfirmationCode") || "").toString().trim().toUpperCase().replace(/\s+/g, "");
   const amount = cartSubtotal(lines);
   const id = "SS-" + Date.now().toString(36).toUpperCase();
+
+  const cust254 = normalizePhone254(phone);
+  if (!cust254 || cust254.length < 12) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevText;
+    }
+    alert("Please enter a valid Kenyan mobile number so we can reach you about pickup or delivery.");
+    return;
+  }
+  if (cust254 === INTERNAL_LEDGER_MSISDN) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = prevText;
+    }
+    alert(
+      "That number is used for Simply Stylish internal records only.\nPlease enter your personal mobile — the WhatsApp draft still goes straight to our shop.",
+    );
+    return;
+  }
 
   const order = {
     id,
