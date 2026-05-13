@@ -28,6 +28,10 @@
     .orders-lines { font-size: 0.78rem; color: var(--brown); max-width: 280px; }
     .back-link { display: inline-block; margin-bottom: 1.5rem; color: var(--rust); font-weight: 700; text-decoration: none; font-size: 0.85rem; }
     .back-link:hover { text-decoration: underline; }
+    .orders-toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
+    .orders-toolbar button { padding: 0.5rem 1rem; background: #fff; color: var(--dark-brown); border: 2px solid var(--sand); border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 0.8rem; font-family: inherit; }
+    .orders-toolbar button:hover { border-color: var(--rust); color: var(--rust); }
+    .orders-meta-hint { font-size: 0.8rem; color: var(--brown); margin-top: 0.35rem; max-width: 42rem; }
   </style>
 </head>
 <body>
@@ -42,10 +46,11 @@
 
   <main class="orders-page">
     <a class="back-link" href="index.html">← Back to site</a>
-    <h1>Merchant orders</h1>
+    <h1>Orders &amp; records</h1>
     <p class="orders-sub">
-      Orders are stored on Netlify when customers check out on your deployed site. Enter the admin token you set in Netlify
-      (<code>ADMIN_ORDERS_TOKEN</code>) — do not share this page or the token publicly.
+      Every checkout is saved on <strong>your</strong> Netlify site (no extra apps or subscriptions). This page is your private ledger:
+      open it on your phone’s browser, sign in with the token below, then bookmark it. Set <code>ADMIN_ORDERS_TOKEN</code>
+      in Netlify and keep it secret.
     </p>
 
     <div class="orders-auth">
@@ -57,6 +62,11 @@
     </div>
     <p class="orders-err" id="ordersErr" hidden></p>
 
+    <div id="ordersToolbar" class="orders-toolbar" hidden>
+      <button type="button" id="exportJson">Download orders.json</button>
+    </div>
+    <p class="orders-meta-hint" id="ordersMetaHint" hidden></p>
+
     <div class="orders-table-wrap" id="ordersWrap" hidden>
       <table class="orders" aria-label="Orders">
         <thead>
@@ -64,9 +74,11 @@
             <th>Reference</th>
             <th>When</th>
             <th>Customer</th>
+            <th>Fulfillment</th>
             <th>Items</th>
             <th>Total</th>
             <th>M-Pesa code</th>
+            <th>Notes</th>
             <th>Payment</th>
           </tr>
         </thead>
@@ -76,14 +88,29 @@
   </main>
 
   <script>
+    const TOKEN_KEY = "ss_simply_orders_admin_token";
     const errEl = document.getElementById("ordersErr");
     const bodyEl = document.getElementById("ordersBody");
     const wrapEl = document.getElementById("ordersWrap");
+    const toolbarEl = document.getElementById("ordersToolbar");
+    const metaHintEl = document.getElementById("ordersMetaHint");
+    const tokenInput = document.getElementById("adminToken");
+    let lastOrders = [];
+
+    try {
+      const saved = localStorage.getItem(TOKEN_KEY);
+      if (saved) tokenInput.value = saved;
+    } catch (_) {}
 
     function esc(s) {
       const d = document.createElement("div");
       d.textContent = s == null ? "" : String(s);
       return d.innerHTML;
+    }
+
+    function fulfillmentLabel(v) {
+      if (v === "delivery") return "Delivery";
+      return "Store pickup";
     }
 
     function payClass(status) {
@@ -92,15 +119,33 @@
       return "pay-pending";
     }
 
+    document.getElementById("exportJson").addEventListener("click", () => {
+      if (!lastOrders.length) return;
+      const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), orders: lastOrders }, null, 2)], {
+        type: "application/json",
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "simply-stylish-orders.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
     document.getElementById("loadOrders").addEventListener("click", async () => {
       errEl.hidden = true;
       bodyEl.innerHTML = "";
-      const token = document.getElementById("adminToken").value.trim();
+      lastOrders = [];
+      toolbarEl.hidden = true;
+      metaHintEl.hidden = true;
+      const token = tokenInput.value.trim();
       if (!token) {
         errEl.textContent = "Enter the admin token.";
         errEl.hidden = false;
         return;
       }
+      try {
+        localStorage.setItem(TOKEN_KEY, token);
+      } catch (_) {}
       try {
         const res = await fetch("/api/orders-list", {
           headers: { Authorization: "Bearer " + token },
@@ -113,6 +158,7 @@
           return;
         }
         const orders = data.orders || [];
+        lastOrders = orders;
         if (orders.length === 0) {
           errEl.textContent = "No orders yet.";
           errEl.hidden = false;
@@ -121,21 +167,56 @@
         }
         errEl.hidden = true;
         wrapEl.hidden = false;
+        toolbarEl.hidden = false;
+        metaHintEl.hidden = false;
+        metaHintEl.textContent =
+          "Showing " +
+          orders.length +
+          " order(s). Add this page to your home screen or keep the token saved on this device only.";
+
         bodyEl.innerHTML = orders.map((o) => {
           const lines = (o.lines || [])
-            .map((l) => esc(l.name) + " × " + l.qty)
+            .map((l) => esc(l.name) + (l.size ? " (" + esc(l.size) + ")" : "") + " × " + l.qty)
             .join("<br/>");
           const when = o.createdAt ? new Date(o.createdAt).toLocaleString() : "—";
           const pay = o.paymentStatus || "pending";
+          const email = o.email && String(o.email).trim()
+            ? "<br/><small>" + esc(String(o.email).trim()) + "</small>"
+            : "";
+          const notes = o.notes && String(o.notes).trim() ? esc(String(o.notes).trim()) : "—";
           return (
             "<tr>" +
-            "<td><strong>" + esc(o.id) + "</strong></td>" +
-            "<td>" + esc(when) + "</td>" +
-            "<td>" + esc(o.fullName) + "<br/><small>" + esc(o.phone) + "</small></td>" +
-            '<td class="orders-lines">' + lines + "</td>" +
-            "<td>KSh " + esc(Number(o.amount || 0).toLocaleString()) + "</td>" +
-            "<td><code style=\"font-size:0.78rem\">" + esc(o.mpesaConfirmationCode || "—") + "</code></td>" +
-            '<td class="' + payClass(pay) + '">' +
+            "<td><strong>" +
+            esc(o.id) +
+            "</strong></td>" +
+            "<td>" +
+            esc(when) +
+            "</td>" +
+            "<td>" +
+            esc(o.fullName) +
+            "<br/><small>" +
+            esc(o.phone) +
+            "</small>" +
+            email +
+            "</td>" +
+            "<td>" +
+            esc(fulfillmentLabel(o.fulfillment)) +
+            "</td>" +
+            '<td class="orders-lines">' +
+            lines +
+            "</td>" +
+            "<td>KSh " +
+            esc(Number(o.amount || 0).toLocaleString()) +
+            "</td>" +
+            '<td><code style="font-size:0.78rem">' +
+            esc(o.mpesaConfirmationCode || "—") +
+            "</code></td>" +
+            "<td>" +
+            notes +
+            "</td>" +
+            '<td class="' +
+            payClass(pay) +
+            '">' +
             esc(pay) +
             (o.mpesaReceiptNumber ? "<br/><small>" + esc(o.mpesaReceiptNumber) + "</small>" : "") +
             "</td>" +
