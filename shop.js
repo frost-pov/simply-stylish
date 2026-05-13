@@ -15,6 +15,7 @@ const CART_KEY = "ss_cart";
 const ORDERS_KEY = "ss_orders";
 
 /** Shop desk line shown on checkout; server SMS defaults match this (+ commission partner). */
+/** Shop owner WhatsApp (public). Commission / internal lines: server env only. */
 const SHOP_ORDER_MSISDN = "254723526004";
 const SHOP_ORDERS_PHONE_LABEL = "0723 526 004";
 
@@ -113,8 +114,8 @@ function closeModal() {
 
 /* ================================================================
    CART & CHECKOUT
-   Cart: localStorage (ss_cart). Orders: local history (ss_orders) until backend exists.
-   M-Pesa: use buildMpesaPayload() + requestMpesaPayment() stub when API is ready.
+   Cart: localStorage (ss_cart). Orders POST to Netlify; customer finishes on WhatsApp
+   with Paybill details (no Daraja STK from the browser).
    ================================================================ */
 function escapeHtml(s) {
   const d = document.createElement("div");
@@ -192,9 +193,14 @@ function resetCheckoutSuccessUI() {
   const main = document.getElementById("checkoutFlowMain");
   const succ = document.getElementById("checkoutFlowSuccess");
   const form = document.getElementById("checkoutForm");
+  const wa = document.getElementById("successWhatsApp");
   if (main) main.hidden = false;
   if (succ) succ.hidden = true;
   if (form) form.reset();
+  if (wa) {
+    wa.hidden = true;
+    wa.href = "#";
+  }
 }
 
 function openCart() {
@@ -286,7 +292,7 @@ function renderCartBody() {
 }
 
 /**
- * Normalizes Kenyan phone for M-Pesa (254XXXXXXXXX).
+ * Kenyan mobile digits for WhatsApp links / normalization.
  */
 function normalizePhone254(phoneRaw) {
   let d = String(phoneRaw || "").replace(/\D/g, "");
@@ -295,49 +301,70 @@ function normalizePhone254(phoneRaw) {
   return d;
 }
 
-/**
- * Payload ready for Daraja STK Push or your backend (amount in KSh, PhoneNumber, etc.).
- */
-function buildMpesaPayload(order) {
-  const phone = normalizePhone254(order.phone);
-  return {
-    orderId: order.id,
-    amount: Math.round(order.amount),
-    currency: "KES",
-    phoneNumber: phone,
-    accountReference: order.id,
-    transactionDesc: "Simply Stylish order " + order.id,
-    customerMessage: "Pay KSh " + Math.round(order.amount) + " for order " + order.id,
-    lines: order.lines,
-  };
+function fulfillmentHuman(value) {
+  if (value === "delivery") return "Delivery — we'll contact you for delivery details.";
+  return "Store pickup — Star Mall B8.";
 }
 
 /**
- * Calls Netlify function `mpesa-stk` (Daraja STK Push). Requires env vars on Netlify.
+ * Owner WhatsApp only (secondary numbers handled server-side only).
  */
-async function requestMpesaPayment(payload) {
-  try {
-    const res = await fetch("/api/mpesa-stk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId: payload.orderId,
-        phone: payload.phoneNumber,
-        amount: payload.amount,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 503 && data.code === "MPESA_NOT_CONFIGURED") {
-      return { ok: false, notConfigured: true, message: data.error || "M-Pesa not configured" };
-    }
-    if (!res.ok || !data.ok) {
-      return { ok: false, error: data.error || "Payment request failed" };
-    }
-    return { ok: true, checkoutRequestId: data.checkoutRequestId, customerMessage: data.customerMessage };
-  } catch (e) {
-    console.warn("requestMpesaPayment", e);
-    return { ok: false, error: "network" };
+function buildOwnerWhatsAppUrl(order) {
+  const total = Number(order.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  const itemLines = (order.lines || [])
+    .map((L) => {
+      const sub = ((L.price_numeric || 0) * (L.qty || 0)).toLocaleString(undefined, {
+        maximumFractionDigits: 0,
+      });
+      const sz = L.size ? ` (${L.size})` : "";
+      return `• ${L.name || "Item"}${sz} ×${L.qty || 1} — KSh ${sub}`;
+    })
+    .join("\n");
+
+  const text = [
+    `Simply Stylish — new order (${order.id})`,
+    "",
+    `Name: ${order.fullName}`,
+    `Phone / WhatsApp: ${order.phone}`,
+    order.email ? `Email: ${order.email}` : null,
+    "",
+    "How to receive",
+    fulfillmentHuman(order.fulfillment),
+    "",
+    "Items",
+    itemLines || "—",
+    "",
+    `TOTAL: KSh ${total}`,
+    "",
+    `Pay via M-Pesa Paybill: ${MPESA_PAYBILL}`,
+    `Account: ${MPESA_PAYBILL_ACCOUNT}`,
+    `Enter amount: KSh ${total} (Lipa na M-Pesa → Pay Bill).`,
+    "",
+    order.notes ? `Notes: ${order.notes}` : null,
+    "",
+    "Please reply here when you have paid so we can prep your bags. Thanks!",
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  const max = 1650;
+  const safeText = text.length <= max ? text : text.slice(0, max) + "…";
+
+  const num = normalizePhone254(SHOP_ORDER_MSISDN);
+  const base = num ? `https://wa.me/${num}` : "";
+  let url = `${base}?text=${encodeURIComponent(safeText)}`;
+
+  const maxLen = 2000;
+  if (url.length > maxLen && base) {
+    const short = `${order.id}: ${order.fullName} · ${order.phone} · Total KSh ${total} · Paybill ${MPESA_PAYBILL} Ac ${MPESA_PAYBILL_ACCOUNT} · ${fulfillmentHuman(order.fulfillment)}`.slice(
+      0,
+      800,
+    );
+    url = `${base}?text=${encodeURIComponent(short)}`;
   }
+
+  return url;
 }
 
 async function postOrderToServer(order) {
@@ -355,6 +382,7 @@ async function postOrderToServer(order) {
     return { ok: false, error: "network" };
   }
 }
+
 
 function appendOrder(order) {
   try {
@@ -386,7 +414,7 @@ function buildCartDrawer() {
             <span>Subtotal</span>
             <strong id="cartSubtotal">KSh 0</strong>
           </div>
-          <p class="cart-note">Pickup at Star Mall or delivery details confirmed after order. Enquiries? <a class="cart-note-phone" href="tel:+${SHOP_ORDER_MSISDN}">${SHOP_ORDERS_PHONE_LABEL}</a></p>
+          <p class="cart-note">Pickup at Star Mall or delivery cleared on WhatsApp. Questions? <a class="cart-note-phone" href="https://wa.me/${SHOP_ORDER_MSISDN}" target="_blank" rel="noopener noreferrer">${SHOP_ORDERS_PHONE_LABEL}</a></p>
           <button type="button" class="btn btn-primary cart-checkout-btn" id="gotoCheckout" disabled>Checkout</button>
         </div>
       </div>
@@ -395,10 +423,10 @@ function buildCartDrawer() {
           <button type="button" class="cart-back" id="checkoutBack">← Back to bag</button>
           <p class="section-label checkout-label-top">Almost there</p>
           <h3 class="checkout-heading">Details &amp; payment</h3>
-          <aside class="checkout-shop-line" aria-label="Shop contact">
-            <strong>Shop line</strong>
-            <a class="checkout-shop-phone" href="tel:+${SHOP_ORDER_MSISDN}">${SHOP_ORDERS_PHONE_LABEL}</a>
-            <span class="checkout-shop-meta">Prefer to arrange pickup or sizing by chat? Reach us here. Your M-Pesa below is usually your own phone for paying.</span>
+          <aside class="checkout-shop-line" aria-label="Shop WhatsApp">
+            <strong>Shop WhatsApp</strong>
+            <a class="checkout-shop-phone" href="https://wa.me/${SHOP_ORDER_MSISDN}" target="_blank" rel="noopener noreferrer">${SHOP_ORDERS_PHONE_LABEL}</a>
+            <span class="checkout-shop-meta">When you confirm your order we open WhatsApp here with your items, pickup or delivery choice, and Paybill details—all in one message for the shop owner.</span>
           </aside>
           <section class="checkout-paybill" aria-label="M-Pesa paybill details">
             <h4 class="checkout-paybill-title">M-Pesa Pay Bill</h4>
@@ -406,7 +434,7 @@ function buildCartDrawer() {
               <div class="checkout-paybill-row"><dt>Paybill</dt><dd><span class="checkout-paybill-num">${MPESA_PAYBILL}</span></dd></div>
               <div class="checkout-paybill-row"><dt>Account</dt><dd><span class="checkout-paybill-num">${MPESA_PAYBILL_ACCOUNT}</span></dd></div>
             </dl>
-            <p class="checkout-paybill-hint">Lipa na M-Pesa → Pay Bill → enter the Paybill and Account, then amount <strong class="checkout-paybill-amount-note">matching your total</strong> in the summary below.</p>
+            <p class="checkout-paybill-hint">On your phone: Lipa na M-Pesa → Pay Bill, then use the total in the summary below. The same Paybill line is included in the WhatsApp message we open for you.</p>
           </section>
           <form class="checkout-form" id="checkoutForm">
             <label class="form-field">
@@ -414,9 +442,9 @@ function buildCartDrawer() {
               <input type="text" name="fullName" required autocomplete="name" placeholder="Your name"/>
             </label>
             <label class="form-field">
-              <span>Your M-Pesa number</span>
+              <span>WhatsApp / mobile number</span>
               <input type="tel" name="phone" required autocomplete="tel" placeholder="07XX XXX XXX"/>
-              <small class="form-hint">We’ll prompt this number when you tap pay—it’s how you approve M-Pesa. We’ll also reach you here about your items.</small>
+              <small class="form-hint">We use this to reach you about pickup or delivery. Use the number you use on WhatsApp if you can.</small>
             </label>
             <label class="form-field">
               <span>Email <em class="optional">(optional)</em></span>
@@ -434,8 +462,8 @@ function buildCartDrawer() {
               <textarea name="notes" rows="3" placeholder="Preferred pickup time, delivery area, etc."></textarea>
             </label>
             <div class="checkout-summary" id="checkoutSummary"></div>
-            <button type="submit" class="btn btn-primary checkout-submit" id="placeOrderBtn">Place order &amp; pay</button>
-            <p class="checkout-mpesa-note" id="mpesaNote">You can Pay Bill using the details above for the exact total, or approve an automatic M-Pesa prompt on your phone if one is sent after you confirm.</p>
+            <button type="submit" class="btn btn-primary checkout-submit" id="placeOrderBtn">Place order &amp; open WhatsApp</button>
+            <p class="checkout-whatsapp-note" id="whatsappHint">Payment is via M-Pesa Pay Bill (details above)—there is no automatic bank prompt from this site. After you submit, send the WhatsApp message so we can match your payment.</p>
           </form>
         </div>
         <div class="checkout-success" id="checkoutFlowSuccess" hidden>
@@ -443,7 +471,8 @@ function buildCartDrawer() {
           <h3>Order placed</h3>
           <p>Your reference: <strong id="successOrderId"></strong></p>
           <p class="checkout-success-body" id="successMsg"></p>
-          <button type="button" class="btn btn-primary" id="cartDone">Done</button>
+          <a class="btn btn-primary checkout-success-wa" id="successWhatsApp" href="#" target="_blank" rel="noopener noreferrer" hidden>Open WhatsApp with this order</a>
+          <button type="button" class="btn btn-primary checkout-success-done" id="cartDone">Done</button>
         </div>
       </div>
     </aside>`;
@@ -529,9 +558,8 @@ async function submitCheckout(e) {
 
   appendOrder(order);
 
+  const waUrl = buildOwnerWhatsAppUrl(order);
   const saved = await postOrderToServer(order);
-  const mpesaPayload = buildMpesaPayload({ ...order, phone });
-  const payResult = await requestMpesaPayment(mpesaPayload);
 
   saveCart([]);
   renderCartBody();
@@ -546,30 +574,26 @@ async function submitCheckout(e) {
   const succ = document.getElementById("checkoutFlowSuccess");
   const sid = document.getElementById("successOrderId");
   const smsg = document.getElementById("successMsg");
+  const waBtn = document.getElementById("successWhatsApp");
+  if (waBtn) {
+    waBtn.href = waUrl;
+    waBtn.hidden = !waUrl;
+  }
   if (main) main.hidden = true;
   if (succ) succ.hidden = false;
   if (sid) sid.textContent = id;
 
-  let msg = `We’ll contact you at ${phone} to confirm and arrange ${fulfillment === "delivery" ? "delivery" : "pickup"}.`;
+  let msg =
+    "We tried to open WhatsApp with your order, pickup/delivery choice, items, total, and Paybill details ready to send. Tap Send in WhatsApp so the shop sees it.";
   if (!saved.ok) {
     msg =
-      "We saved a copy of this order on your device only. Deploy the site on Netlify with serverless functions so orders appear in your admin list. " +
-      msg;
+      "We could not reach the server to store this order on our side—check your connection. Your bag was cleared here. Use the button below to open WhatsApp and send the draft so the shop still gets the details.";
   }
-  if (payResult.ok) {
-    msg =
-      (payResult.customerMessage ? payResult.customerMessage + " " : "") +
-      "Approve the M-Pesa prompt on your phone to pay. " +
-      msg;
-  } else if (payResult.notConfigured) {
-    msg = "M-Pesa prompt is not active on the server yet (add Daraja keys in Netlify). " + msg;
-  } else if (payResult.error === "network") {
-    msg = "Could not reach the payment server. " + msg;
-  } else if (payResult.error) {
-    msg = "M-Pesa prompt could not be sent: " + payResult.error + ". Your order is still recorded. " + msg;
-  }
-
   if (smsg) smsg.textContent = msg;
+
+  if (waUrl) {
+    window.open(waUrl, "_blank", "noopener,noreferrer");
+  }
 }
 
 

@@ -1,10 +1,11 @@
 // POST JSON order — appends to Netlify Blobs (merchant-visible via /api/orders-list).
 // Optional: GOOGLE_APPS_SCRIPT_ORDER_URL duplicates rows to a Sheet.
 //
-// Order SMS to two lines (defaults: shop 254723526004, commission 254797123659):
-//   — Set AFRICASTALKING_USERNAME + AFRICASTALKING_API_KEY (optional AFRICASTALKING_SENDER_ID) to send both texts.
-//   — Or set ORDER_NOTIFY_WEBHOOK (+ optional ORDER_NOTIFY_WEBHOOK_SECRET) for Make/Zapier to fan out SMS.
-// Override recipient numbers: NOTIFY_STORE_MSISDN, NOTIFY_COMMISSION_MSISDN (254… format or 07…).
+// After save, optional stakeholder pings (never sent in the API response to browsers):
+//   — NOTIFY_STORE_MSISDN / NOTIFY_COMMISSION_MSISDN override defaults (254… or 07…).
+//   — AFRICASTALKING_USERNAME + AFRICASTALKING_API_KEY sends SMS to both.
+//   — ORDER_NOTIFY_WEBHOOK (+ optional ORDER_NOTIFY_WEBHOOK_SECRET): e.g. Make.com → WhatsApp.
+// Internal/commission recipient must never be rendered on the site; only this function uses it.
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -63,13 +64,26 @@ function buildShopSms(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
   const where = order.fulfillment === "delivery" ? "Delivery" : "Pickup";
   const items = summarizeLines(order);
-  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. ${PAYBILL_DISPLAY}. ${items}`.slice(0, 470);
+  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. Customer uses WhatsApp checkout + ${PAYBILL_DISPLAY}. ${items}`.slice(
+    0,
+    470,
+  );
 }
 
 function buildCommissionSms(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
   const tel = order.phone || "—";
-  return `SS commission: Order ${order.id} total KSh ${amt}. Cust ${tel}.`.slice(0, 470);
+  return `SS internal: order ${order.id} KSh ${amt}. Cust ${tel}. (Shop gets customer WhatsApp draft; this is your silent copy.)`.slice(
+    0,
+    470,
+  );
+}
+
+function waMeLink(msisdn, text, maxChars = 950) {
+  const t = text.length <= maxChars ? text : `${text.slice(0, maxChars - 1)}…`;
+  let u = `https://wa.me/${msisdn}?text=${encodeURIComponent(t)}`;
+  if (u.length > 2000) u = `https://wa.me/${msisdn}?text=${encodeURIComponent(t.slice(0, 400) + "…")}`;
+  return u;
 }
 
 async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shopMsg, commissionMsg) {
@@ -79,6 +93,7 @@ async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shop
   try {
     const headers = { "Content-Type": "application/json" };
     if (secret) headers["X-Webhook-Secret"] = secret;
+
     await fetch(url, {
       method: "POST",
       headers,
@@ -86,8 +101,17 @@ async function postOrderNotifyWebhook(order, storeMsisdn, commissionMsisdn, shop
         event: "order_created",
         order,
         notifications: {
-          store: { msisdn: storeMsisdn, message: shopMsg },
-          commission: { msisdn: commissionMsisdn, message: commissionMsg },
+          store: {
+            msisdn: storeMsisdn,
+            message: shopMsg,
+            whatsappDeepLink: waMeLink(storeMsisdn, shopMsg),
+          },
+          commission: {
+            msisdn: commissionMsisdn,
+            message: commissionMsg,
+            internalOnly: true,
+            whatsappDeepLink: waMeLink(commissionMsisdn, commissionMsg),
+          },
         },
       }),
     });

@@ -833,7 +833,8 @@ footer span { color: rgba(212, 120, 79, 0.95); }
   font-size: 0.8rem;
   border-radius: 100px;
 }
-.checkout-mpesa-note {
+.checkout-mpesa-note,
+.checkout-whatsapp-note {
   font-size: 0.76rem;
   color: var(--brown);
   text-align: center;
@@ -842,7 +843,23 @@ footer span { color: rgba(212, 120, 79, 0.95); }
   padding-bottom: 0.25rem;
 }
 
-.checkout-success { text-align: center; padding: 2rem 1rem 2rem calc(1rem + env(safe-area-inset-bottom, 0)); max-width: 24rem; margin: 0 auto; width: 100%; }
+.checkout-success-wa {
+  width: 100%;
+  text-align: center;
+  margin: 0 0 0.75rem;
+  box-sizing: border-box;
+}
+.checkout-success-done { width: 100%; text-align: center; }
+.checkout-success {
+  text-align: center;
+  padding: 2rem 1rem 2rem calc(1rem + env(safe-area-inset-bottom, 0));
+  max-width: 24rem;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
 .checkout-success-icon {
   width: 56px; height: 56px; margin: 0 auto 1rem;
   background: var(--rust); color: #fff; border-radius: 50%;
