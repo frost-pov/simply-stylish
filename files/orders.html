@@ -66,6 +66,7 @@
             <th>Customer</th>
             <th>Items</th>
             <th>Total</th>
+            <th>M-Pesa code</th>
             <th>Payment</th>
           </tr>
         </thead>
@@ -133,6 +134,7 @@
             "<td>" + esc(o.fullName) + "<br/><small>" + esc(o.phone) + "</small></td>" +
             '<td class="orders-lines">' + lines + "</td>" +
             "<td>KSh " + esc(Number(o.amount || 0).toLocaleString()) + "</td>" +
+            "<td><code style=\"font-size:0.78rem\">" + esc(o.mpesaConfirmationCode || "—") + "</code></td>" +
             '<td class="' + payClass(pay) + '">' +
             esc(pay) +
             (o.mpesaReceiptNumber ? "<br/><small>" + esc(o.mpesaReceiptNumber) + "</small>" : "") +

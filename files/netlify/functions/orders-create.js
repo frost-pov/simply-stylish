@@ -64,7 +64,7 @@ function buildShopSms(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
   const where = order.fulfillment === "delivery" ? "Delivery" : "Pickup";
   const items = summarizeLines(order);
-  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. Customer uses WhatsApp checkout + ${PAYBILL_DISPLAY}. ${items}`.slice(
+  return `Simply Stylish: NEW ORDER ${order.id}. ${who} ${tel}. ${where}. KSh ${amt}. MPesa code: ${(order.mpesaConfirmationCode || "—").toString()}. ${PAYBILL_DISPLAY}. ${items}`.slice(
     0,
     470,
   );
@@ -73,10 +73,8 @@ function buildShopSms(order) {
 function buildCommissionSms(order) {
   const amt = Number(order.amount || 0).toLocaleString("en-KE");
   const tel = order.phone || "—";
-  return `SS internal: order ${order.id} KSh ${amt}. Cust ${tel}. (Shop gets customer WhatsApp draft; this is your silent copy.)`.slice(
-    0,
-    470,
-  );
+  const code = (order.mpesaConfirmationCode || "—").toString();
+  return `SS internal: order ${order.id} KSh ${amt}. Code ${code}. Cust ${tel}.`.slice(0, 470);
 }
 
 function waMeLink(msisdn, text, maxChars = 950) {

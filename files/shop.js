@@ -340,6 +340,8 @@ function buildOwnerWhatsAppUrl(order) {
     `Account: ${MPESA_PAYBILL_ACCOUNT}`,
     `Enter amount: KSh ${total} (Lipa na M-Pesa → Pay Bill).`,
     "",
+    `M-Pesa confirmation code: ${(order.mpesaConfirmationCode || "").toString().trim() || "—"}`,
+    "",
     order.notes ? `Notes: ${order.notes}` : null,
     "",
     "Please reply here when you have paid so we can prep your bags. Thanks!",
@@ -357,7 +359,7 @@ function buildOwnerWhatsAppUrl(order) {
 
   const maxLen = 2000;
   if (url.length > maxLen && base) {
-    const short = `${order.id}: ${order.fullName} · ${order.phone} · Total KSh ${total} · Paybill ${MPESA_PAYBILL} Ac ${MPESA_PAYBILL_ACCOUNT} · ${fulfillmentHuman(order.fulfillment)}`.slice(
+    const short = `${order.id}: ${order.fullName} · ${order.phone} · Total KSh ${total} · MPesa code ${(order.mpesaConfirmationCode || "").toString().trim()} · Paybill ${MPESA_PAYBILL}`.slice(
       0,
       800,
     );
@@ -462,8 +464,21 @@ function buildCartDrawer() {
               <textarea name="notes" rows="3" placeholder="Preferred pickup time, delivery area, etc."></textarea>
             </label>
             <div class="checkout-summary" id="checkoutSummary"></div>
+            <label class="form-field">
+              <span>M-Pesa confirmation code</span>
+              <input
+                type="text"
+                name="mpesaConfirmationCode"
+                required
+                maxlength="32"
+                autocomplete="one-time-code"
+                class="checkout-mpesa-code"
+                placeholder="From your M-Pesa SMS after Pay Bill"
+              />
+              <small class="form-hint">Paste the confirmation code from the M-Pesa message you get right after paying (so we can verify your payment).</small>
+            </label>
             <button type="submit" class="btn btn-primary checkout-submit" id="placeOrderBtn">Place order &amp; open WhatsApp</button>
-            <p class="checkout-whatsapp-note" id="whatsappHint">Payment is via M-Pesa Pay Bill (details above)—there is no automatic bank prompt from this site. After you submit, send the WhatsApp message so we can match your payment.</p>
+            <p class="checkout-whatsapp-note" id="whatsappHint">Pay with M-Pesa Pay Bill (above), paste your confirmation code from the M-Pesa SMS, then submit. We open WhatsApp with everything included—send that message so we can verify and prep your order.</p>
           </form>
         </div>
         <div class="checkout-success" id="checkoutFlowSuccess" hidden>
@@ -536,6 +551,7 @@ async function submitCheckout(e) {
   const email = (fd.get("email") || "").toString().trim();
   const fulfillment = (fd.get("fulfillment") || "pickup").toString();
   const notes = (fd.get("notes") || "").toString().trim();
+  const mpesaConfirmationCode = (fd.get("mpesaConfirmationCode") || "").toString().trim().toUpperCase().replace(/\s+/g, "");
   const amount = cartSubtotal(lines);
   const id = "SS-" + Date.now().toString(36).toUpperCase();
 
@@ -547,6 +563,7 @@ async function submitCheckout(e) {
     email,
     fulfillment,
     notes,
+    mpesaConfirmationCode,
     amount,
     lines: lines.map(L => ({
       name: L.name,

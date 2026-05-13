@@ -825,6 +825,11 @@ footer span { color: rgba(212, 120, 79, 0.95); }
 }
 .form-field textarea { min-height: 5.75rem; resize: vertical; line-height: 1.45; }
 .form-field select { cursor: pointer; }
+.form-field input.checkout-mpesa-code {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", Consolas, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus { border-color: var(--rust); }
